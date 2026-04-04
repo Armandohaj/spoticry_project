@@ -151,10 +151,12 @@ fn handle_play(
     );
 
     // Enviar header con información del audio
+    // Enviar header con información del audio
     send_response(writer, &Response::AudioStart {
-        sample_rate: decoded.info.sample_rate,
-        channels:    decoded.info.channels,
-        bits:        decoded.info.bits,
+        sample_rate:  decoded.info.sample_rate,
+        channels:     decoded.info.channels,
+        bits:         decoded.info.bits,
+        total_bytes:  decoded.samples.len(), // ← esta línea debe estar
     });
 
     // Enviar los bytes de audio en bloques de 4096 bytes

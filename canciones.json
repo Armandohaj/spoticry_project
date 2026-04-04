@@ -5,5 +5,19 @@
     "genre": "Cumbia",
     "year": 1992,
     "file_path": "songs\\Los Socios Del Ritmo - Llorar [Official Audio].mp3"
+  },
+
+
+  {
+    "name": "Tonta",
+    "artist": "Grupo mojado",
+    "genre": "Cumbia",
+    "year": 2010,
+    "file_path": "songs\\Tonta.mp3"
   }
+
 ]
+
+
+
+
