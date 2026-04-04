@@ -1,3 +1,7 @@
+mod audio {
+    pub mod decoder;
+}
+
 mod domain {
     pub mod song;
     pub mod playlist;
@@ -29,7 +33,7 @@ use cli::menu::*;
 
 fn main() {
     let mut id_gen = new_id_generator();
-    let songs = load_songs("songs", &mut id_gen);
+    let songs = load_songs("canciones.json", &mut id_gen);
 
     println!("Canciones cargadas: {}", songs.len());
 
