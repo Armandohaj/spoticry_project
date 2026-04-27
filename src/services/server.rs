@@ -4,13 +4,20 @@ use std::thread;
 use std::io::{BufRead, BufReader, Write};
 
 use crate::domain::song::Song;
+use crate::domain::playlist::Playlist;
 use crate::domain::protocol::{Request, Response};
 use crate::services::song_service::{
-    list_songs, search_by_name, search_by_artist, search_by_year,
+    list_songs, search_by_name, search_by_year_range, search_by_genre_ranked,
 };
+use crate::services::playlist_service as pl_svc;
+use crate::storage::file_loader::save_playlists;
 use crate::audio::decoder::decode_mp3;
 
-pub fn start_server(shared_songs: Arc<Mutex<Vec<Song>>>, address: &str) {
+pub fn start_server(
+    shared_songs:     Arc<Mutex<Vec<Song>>>,
+    shared_playlists: Arc<Mutex<Vec<Playlist>>>,
+    address:          &str,
+) {
     let listener = TcpListener::bind(address)
         .expect("No se pudo bindear el puerto");
 
@@ -19,9 +26,10 @@ pub fn start_server(shared_songs: Arc<Mutex<Vec<Song>>>, address: &str) {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                let songs_clone = Arc::clone(&shared_songs);
+                let songs_clone     = Arc::clone(&shared_songs);
+                let playlists_clone = Arc::clone(&shared_playlists);
                 thread::spawn(move || {
-                    handle_client(stream, songs_clone);
+                    handle_client(stream, songs_clone, playlists_clone);
                 });
             }
             Err(e) => eprintln!("Error al aceptar conexión: {}", e),
@@ -29,7 +37,11 @@ pub fn start_server(shared_songs: Arc<Mutex<Vec<Song>>>, address: &str) {
     }
 }
 
-fn handle_client(stream: TcpStream, shared_songs: Arc<Mutex<Vec<Song>>>) {
+fn handle_client(
+    stream:           TcpStream,
+    shared_songs:     Arc<Mutex<Vec<Song>>>,
+    shared_playlists: Arc<Mutex<Vec<Playlist>>>,
+) {
     let peer = stream.peer_addr()
         .map(|a| a.to_string())
         .unwrap_or("desconocido".to_string());
@@ -41,22 +53,19 @@ fn handle_client(stream: TcpStream, shared_songs: Arc<Mutex<Vec<Song>>>) {
 
     for line in reader.lines() {
         match line {
-            Ok(json) => {
-                handle_request(&json, &shared_songs, &mut writer);
-            }
-            Err(_) => break,
+            Ok(json) => handle_request(&json, &shared_songs, &shared_playlists, &mut writer),
+            Err(_)   => break,
         }
     }
 
     println!("Cliente desconectado: {}", peer);
 }
 
-// Separamos el manejo en su propia función porque Play necesita
-// enviar múltiples respuestas (header + bytes), no solo una
 fn handle_request(
-    json:          &str,
-    shared_songs:  &Arc<Mutex<Vec<Song>>>,
-    writer:        &mut TcpStream,
+    json:             &str,
+    shared_songs:     &Arc<Mutex<Vec<Song>>>,
+    shared_playlists: &Arc<Mutex<Vec<Playlist>>>,
+    writer:           &mut TcpStream,
 ) {
     let request: Request = match serde_json::from_str(json) {
         Ok(r)  => r,
@@ -69,32 +78,146 @@ fn handle_request(
     };
 
     match request {
+        // ── Canciones ──────────────────────────────────────────────
         Request::ListSongs => {
             let songs = shared_songs.lock().unwrap().clone();
             send_response(writer, &Response::Ok { songs: list_songs(&songs) });
         }
-
         Request::SearchByName { query } => {
             let songs = shared_songs.lock().unwrap().clone();
-            send_response(writer, &Response::Ok { songs: search_by_name(&songs, &query) });
+            send_response(writer, &Response::Ok {
+                songs: search_by_name(&songs, &query)
+            });
         }
-
-        Request::SearchByArtist { query } => {
+        Request::SearchByYearRange { from, to } => {
             let songs = shared_songs.lock().unwrap().clone();
-            send_response(writer, &Response::Ok { songs: search_by_artist(&songs, &query) });
+            send_response(writer, &Response::Ok {
+                songs: search_by_year_range(&songs, from, to)
+            });
         }
-
-        Request::SearchByYear { year } => {
+        Request::SearchByGenre { query } => {
             let songs = shared_songs.lock().unwrap().clone();
-            send_response(writer, &Response::Ok { songs: search_by_year(&songs, year) });
+            send_response(writer, &Response::Ok {
+                songs: search_by_genre_ranked(&songs, &query)
+            });
         }
-
         Request::Play { song_id } => {
             handle_play(song_id, shared_songs, writer);
         }
-
         Request::Stop { song_id } => {
             handle_stop(song_id, shared_songs, writer);
+        }
+
+        // ── Playlists ──────────────────────────────────────────────
+        Request::CreatePlaylist { name } => {
+            let mut playlists = shared_playlists.lock().unwrap();
+            match pl_svc::create(&playlists, &name) {
+                Ok(new) => {
+                    *playlists = new;
+                    save_playlists("playlists.json", &playlists); // ← guardar
+                    send_response(writer, &Response::PlaylistList {
+                        playlists: pl_svc::list_names(&playlists)
+                    });
+                }
+                Err(msg) => send_response(writer, &Response::Error { message: msg }),
+            }
+        }
+
+        Request::DeletePlaylist { name } => {
+            let mut playlists = shared_playlists.lock().unwrap();
+            match pl_svc::delete(&playlists, &name) {
+                Ok(new) => {
+                    *playlists = new;
+                    save_playlists("playlists.json", &playlists); // ← guardar
+                    send_response(writer, &Response::PlaylistList {
+                        playlists: pl_svc::list_names(&playlists)
+                    });
+                }
+                Err(msg) => send_response(writer, &Response::Error { message: msg }),
+            }
+        }
+
+        Request::ListPlaylists => {
+            let playlists = shared_playlists.lock().unwrap();
+            send_response(writer, &Response::PlaylistList {
+                playlists: pl_svc::list_names(&playlists)
+            });
+        }
+
+        Request::AddToPlaylist { playlist_name, song_id } => {
+            let songs         = shared_songs.lock().unwrap().clone();
+            let mut playlists = shared_playlists.lock().unwrap();
+
+            match songs.iter().find(|s| s.id == song_id).cloned() {
+                None => send_response(writer, &Response::Error {
+                    message: format!("Canción {} no encontrada", song_id)
+                }),
+                Some(s) => match pl_svc::add_song(&playlists, &playlist_name, s) {
+                    Ok(new) => {
+                        *playlists = new;
+                        save_playlists("playlists.json", &playlists); // ← guardar
+                        match pl_svc::get(&playlists, &playlist_name) {
+                            Ok(pl)   => send_response(writer, &Response::PlaylistOk { playlist: pl }),
+                            Err(msg) => send_response(writer, &Response::Error { message: msg }),
+                        }
+                    }
+                    Err(msg) => send_response(writer, &Response::Error { message: msg }),
+                }
+            }
+        }
+
+        Request::RemoveFromPlaylist { playlist_name, song_id } => {
+            let mut playlists = shared_playlists.lock().unwrap();
+            match pl_svc::remove_song(&playlists, &playlist_name, song_id) {
+                Ok(new) => {
+                    *playlists = new;
+                    save_playlists("playlists.json", &playlists); // ← guardar
+                    match pl_svc::get(&playlists, &playlist_name) {
+                        Ok(pl)   => send_response(writer, &Response::PlaylistOk { playlist: pl }),
+                        Err(msg) => send_response(writer, &Response::Error { message: msg }),
+                    }
+                }
+                Err(msg) => send_response(writer, &Response::Error { message: msg }),
+            }
+        }
+
+        Request::GetPlaylist { playlist_name } => {
+            let playlists = shared_playlists.lock().unwrap();
+            match pl_svc::get(&playlists, &playlist_name) {
+                Ok(pl)   => send_response(writer, &Response::PlaylistOk { playlist: pl }),
+                Err(msg) => send_response(writer, &Response::Error { message: msg }),
+            }
+        }
+
+        Request::FilterPlaylist { playlist_name, field, query } => {
+            let playlists = shared_playlists.lock().unwrap();
+            match pl_svc::filter(&playlists, &playlist_name, &field, &query) {
+                Ok(pl)   => send_response(writer, &Response::PlaylistOk { playlist: pl }),
+                Err(msg) => send_response(writer, &Response::Error { message: msg }),
+            }
+        }
+
+        Request::SortPlaylist { playlist_name, by } => {
+            let mut playlists = shared_playlists.lock().unwrap();
+            match pl_svc::sort(&playlists, &playlist_name, &by) {
+                Ok(new) => {
+                    *playlists = new;
+                    save_playlists("playlists.json", &playlists); // ← guardar
+                    match pl_svc::get(&playlists, &playlist_name) {
+                        Ok(pl)   => send_response(writer, &Response::PlaylistOk { playlist: pl }),
+                        Err(msg) => send_response(writer, &Response::Error { message: msg }),
+                    }
+                }
+                Err(msg) => send_response(writer, &Response::Error { message: msg }),
+            }
+        }
+
+        Request::SummarizePlaylist { playlist_name } => {
+            let playlists = shared_playlists.lock().unwrap();
+            match pl_svc::summarize(&playlists, &playlist_name) {
+                Ok(info) => send_response(writer, &Response::PlaylistInfo { info }),
+                Err(msg) => send_response(writer, &Response::Error { message: msg }),
+            }
         }
     }
 }
@@ -104,14 +227,9 @@ fn handle_play(
     shared_songs: &Arc<Mutex<Vec<Song>>>,
     writer:       &mut TcpStream,
 ) {
-    // Buscar la canción y obtener su file_path
-    // Hacemos esto en un bloque separado para liberar el lock antes de decodificar
     let file_path = {
         let mut songs = shared_songs.lock().unwrap();
-
-        // Buscar la canción por ID
         let song = songs.iter_mut().find(|s| s.id == song_id);
-
         match song {
             None => {
                 send_response(writer, &Response::Error {
@@ -119,20 +237,14 @@ fn handle_play(
                 });
                 return;
             }
-            Some(s) => {
-                // Marcar como en reproducción
-                s.is_playing = true;
-                s.file_path.clone()
-            }
+            Some(s) => { s.is_playing = true; s.file_path.clone() }
         }
-    }; // ← lock se libera aquí
+    };
 
-    // Decodificar el MP3 (puede tardar varios segundos)
     println!("Decodificando: {}", file_path);
     let decoded = match decode_mp3(&file_path) {
         Ok(d)  => d,
         Err(e) => {
-            // Si falla, desmarcar is_playing
             if let Ok(mut songs) = shared_songs.lock() {
                 if let Some(s) = songs.iter_mut().find(|s| s.id == song_id) {
                     s.is_playing = false;
@@ -143,40 +255,29 @@ fn handle_play(
         }
     };
 
-    println!(
-        "Audio decodificado: {} bytes, {}Hz, {} canales",
-        decoded.samples.len(),
-        decoded.info.sample_rate,
-        decoded.info.channels
-    );
+    println!("Audio decodificado: {} bytes, {}Hz, {} canales",
+             decoded.samples.len(), decoded.info.sample_rate, decoded.info.channels);
 
-    // Enviar header con información del audio
-    // Enviar header con información del audio
     send_response(writer, &Response::AudioStart {
-        sample_rate:  decoded.info.sample_rate,
-        channels:     decoded.info.channels,
-        bits:         decoded.info.bits,
-        total_bytes:  decoded.samples.len(), // ← esta línea debe estar
+        sample_rate: decoded.info.sample_rate,
+        channels:    decoded.info.channels,
+        bits:        decoded.info.bits,
+        total_bytes: decoded.samples.len(),
     });
 
-    // Enviar los bytes de audio en bloques de 4096 bytes
-    // No se envía todo de una vez porque puede ser muy grande (30MB+)
-    let chunk_size = 4096;
-    for chunk in decoded.samples.chunks(chunk_size) {
+    for chunk in decoded.samples.chunks(4096) {
         if writer.write_all(chunk).is_err() {
             println!("Error enviando audio, cliente desconectado");
             break;
         }
     }
 
-    // Marcar como no reproduciendo al terminar
     if let Ok(mut songs) = shared_songs.lock() {
         if let Some(s) = songs.iter_mut().find(|s| s.id == song_id) {
             s.is_playing = false;
         }
     }
 
-    // Notificar al cliente que terminó
     send_response(writer, &Response::AudioEnd);
     println!("Stream de audio finalizado para canción {}", song_id);
 }
@@ -197,11 +298,9 @@ fn handle_stop(
     }
 }
 
-// Función auxiliar para serializar y enviar una respuesta JSON
 fn send_response(writer: &mut TcpStream, response: &Response) {
     let json = serde_json::to_string(response)
         .unwrap_or_else(|_| r#"{"status":"Error","message":"serialize error"}"#.to_string());
-
     if let Err(e) = writeln!(writer, "{}", json) {
         eprintln!("Error enviando respuesta: {}", e);
     }

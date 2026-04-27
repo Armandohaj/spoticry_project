@@ -1,0 +1,13 @@
+[
+  {
+    "name": "armando",
+    "song_ids": [
+      2,
+      5
+    ]
+  },
+  {
+    "name": "jose",
+    "song_ids": []
+  }
+]

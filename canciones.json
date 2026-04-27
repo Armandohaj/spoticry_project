@@ -4,20 +4,48 @@
     "artist": "Los Socios Del Ritmo",
     "genre": "Cumbia",
     "year": 1992,
-    "file_path": "songs\\Los Socios Del Ritmo - Llorar [Official Audio].mp3"
+    "file_path": "songs/Los Socios Del Ritmo - Llorar [Official Audio].mp3"
   },
-
-
   {
     "name": "Tonta",
     "artist": "Grupo mojado",
     "genre": "Cumbia",
     "year": 2010,
-    "file_path": "songs\\Tonta.mp3"
+    "file_path": "songs/Tonta.mp3"
+  },
+  {
+    "name": "P2",
+    "artist": "Lil Uzi Vert",
+    "genre": "Hip Hop",
+    "year": 2020,
+    "file_path": "songs/Lil Uzi Vert - P2 [Official Audio].mp3"
+  },
+  {
+    "name": "JETSKI",
+    "artist": "Lil Mosey & Lil Tecca",
+    "genre": "Hip Hop",
+    "year": 2021,
+    "file_path": "songs/Internet Money  JETSKI ft. Lil Mosey & Lil Tecca.mp3"
+  },
+  {
+    "name": "Trap Queen",
+    "artist": "Fetty Wap",
+    "genre": "Hip Hop",
+    "year": 2021,
+    "file_path": "songs/Fetty Wap  - Trap Queen.mp3"
+  },
+  {
+    "name": "Paris",
+    "artist": "Edgardo Nuñez",
+    "genre": "",
+    "year": 2021,
+    "file_path": "songs/Fetty Wap  - Trap Queen.mp3"
+  },
+  {
+    "name": "asdasd",
+    "artist": "sdfsf",
+    "genre": "sdfs",
+    "year": 2000,
+    "file_path": "songs/Como Duele El Amor.mp3"
   }
-
 ]
-
-
-
-
