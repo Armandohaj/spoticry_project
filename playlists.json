@@ -3,11 +3,15 @@
     "name": "armando",
     "song_ids": [
       2,
-      5
+      5,
+      11
     ]
   },
   {
     "name": "jose",
-    "song_ids": []
+    "song_ids": [
+      2,
+      3
+    ]
   }
 ]

@@ -1,19 +1,5 @@
 [
   {
-    "name": "Llorar",
-    "artist": "Los Socios Del Ritmo",
-    "genre": "Cumbia",
-    "year": 1992,
-    "file_path": "songs/Los Socios Del Ritmo - Llorar [Official Audio].mp3"
-  },
-  {
-    "name": "Tonta",
-    "artist": "Grupo mojado",
-    "genre": "Cumbia",
-    "year": 2010,
-    "file_path": "songs/Tonta.mp3"
-  },
-  {
     "name": "P2",
     "artist": "Lil Uzi Vert",
     "genre": "Hip Hop",
@@ -37,15 +23,57 @@
   {
     "name": "Paris",
     "artist": "Edgardo Nuñez",
-    "genre": "",
+    "genre": "regional mexico",
     "year": 2021,
-    "file_path": "songs/Fetty Wap  - Trap Queen.mp3"
+    "file_path": "songs/Edgardo Nuñez - Paris.mp3"
   },
   {
-    "name": "asdasd",
-    "artist": "sdfsf",
-    "genre": "sdfs",
-    "year": 2000,
-    "file_path": "songs/Como Duele El Amor.mp3"
+    "name": "Muchachita De Ojos Tristes",
+    "artist": "Edgardo Nuñez",
+    "genre": "regional mexicano",
+    "year": 2024,
+    "file_path": "songs/Muchachita De Ojos Tristes - Edgardo Nunez.mp3"
+  },
+  {
+    "name": "Volvere",
+    "artist": "K-Paz De La Sierra",
+    "genre": "regional mexicano",
+    "year": 2009,
+    "file_path": "songs/K-Paz De La Sierra - Volveré.mp3"
+  },
+  {
+    "name": "Substance",
+    "artist": "03 Greedo",
+    "genre": "Hip Hop",
+    "year": 2018,
+    "file_path": "songs/03 Greedo - Substance.mp3"
+  },
+  {
+    "name": "Tonta",
+    "artist": "Mojado",
+    "genre": "Cumbia",
+    "year": 2009,
+    "file_path": "songs/Mojado - Tonta.mp3"
+  },
+  {
+    "name": "De Rodillas Te Pido",
+    "artist": "Los Alegres De La Sierra",
+    "genre": "Regional Mexicano",
+    "year": 2009,
+    "file_path": "songs/Los Alegres de La Sierra - De Rodillas Te Pido.mp3"
+  },
+  {
+    "name": "Llorrar",
+    "artist": "Los Socios Del Ritmo",
+    "genre": "Cumbia",
+    "year": 2013,
+    "file_path": "songs/Los Socios Del Ritmo - Llorar.mp3"
+  },
+  {
+    "name": "Dejame entrar",
+    "artist": "makano",
+    "genre": "rap",
+    "year": 2005,
+    "file_path": "songs/Dejame Entrar.mp3"
   }
 ]

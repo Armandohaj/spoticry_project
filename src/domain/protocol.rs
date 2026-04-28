@@ -12,6 +12,12 @@ pub enum Request {
     SearchByGenre     { query: String      },
     Play              { song_id: u32       },
     Stop              { song_id: u32       },
+    DeleteSong        { song_id: u32 },
+
+    ListLibrarySongs,
+    AddSongFromLibrary { file_name: String, name: String, artist: String, genre: String, year: u32 },
+
+
 
     // Playlists
     CreatePlaylist    { name: String                    },
@@ -35,4 +41,5 @@ pub enum Response {
     PlaylistOk    { playlist: Playlist                                              },
     PlaylistList  { playlists: Vec<String>                                          },
     PlaylistInfo  { info: String                                                    },
+    LibraryList { files: Vec<String> },
 }
