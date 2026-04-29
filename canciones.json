@@ -75,5 +75,12 @@
     "genre": "rap",
     "year": 2005,
     "file_path": "songs/Dejame Entrar.mp3"
+  },
+  {
+    "name": "parece sincera",
+    "artist": "armando",
+    "genre": "pop",
+    "year": 2000,
+    "file_path": "songs/Parece Sincera.mp3"
   }
 ]

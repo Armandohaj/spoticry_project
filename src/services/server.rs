@@ -482,11 +482,11 @@ fn handle_add_song_from_library(
         return;
     }
 
-    if let Err(e) = fs::rename(&source_path, &destination_path) {
+    if let Err(e) = fs::copy(&source_path, &destination_path) {
         send_response(
             writer,
             &Response::Error {
-                message: format!("No se pudo mover la canción a songs: {}", e),
+                message: format!("No se pudo copiar la canción a songs: {}", e),
             },
         );
         return;

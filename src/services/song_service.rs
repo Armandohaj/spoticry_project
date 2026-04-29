@@ -1,5 +1,5 @@
 use crate::domain::song::Song;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub fn list_songs(songs: &[Song]) -> Vec<Song> {
     songs.to_vec()
@@ -10,6 +10,7 @@ pub fn print_songs(songs: &[Song]) {
         println!("No hay canciones.");
         return;
     }
+
     songs.iter().for_each(|s| {
         println!(
             "[{}] {} - {} ({}) [{}] {}",
@@ -34,77 +35,117 @@ pub fn remove_song(songs: Vec<Song>, id: u32) -> Vec<Song> {
         .collect()
 }
 
-// BÚSQUEDA 1: Por nombre usando índice invertido
-// Construye un HashMap de palabra -> índices de canciones
-// luego busca cada palabra de la query en ese mapa
+// BÚSQUEDA 1: Por nombre usando índice invertido y ranking.
+//
+// Esta búsqueda no recorre simplemente cada canción con contains().
+// Primero construye un índice invertido:
+// palabra_normalizada -> lista de índices de canciones.
+//
+// Luego separa la consulta en palabras y busca coincidencias en el índice.
+// Las canciones se ordenan según la cantidad de palabras coincidentes.
+// Esto hace que la técnica sea distinta a las búsquedas por género y año.
 pub fn search_by_name(songs: &[Song], query: &str) -> Vec<Song> {
-    // Paso 1: construir índice invertido
-    let mut index: HashMap<String, Vec<usize>> = HashMap::new();
+    let query_normalized = normalize_text(query);
 
-    songs.iter().enumerate().for_each(|(i, song)| {
-        song.name
-            .to_lowercase()
-            .split_whitespace()
-            .for_each(|word| {
-                index.entry(word.to_string())
-                    .or_insert_with(Vec::new)
-                    .push(i);
+    if query_normalized.is_empty() {
+        return songs.to_vec();
+    }
+
+    let mut inverted_index: HashMap<String, Vec<usize>> = HashMap::new();
+
+    songs.iter().enumerate().for_each(|(index, song)| {
+        tokenize(&song.name).into_iter().for_each(|word| {
+            inverted_index
+                .entry(word)
+                .or_insert_with(Vec::new)
+                .push(index);
+        });
+    });
+
+    let query_words = tokenize(&query_normalized);
+
+    if query_words.is_empty() {
+        return Vec::new();
+    }
+
+    let mut scores: HashMap<usize, u32> = HashMap::new();
+
+    query_words.iter().for_each(|query_word| {
+        inverted_index
+            .iter()
+            .filter(|(indexed_word, _)| {
+                indexed_word.contains(query_word.as_str())
+                    || query_word.contains(indexed_word.as_str())
+            })
+            .for_each(|(_, song_indices)| {
+                song_indices.iter().for_each(|song_index| {
+                    let counter = scores.entry(*song_index).or_insert(0);
+                    *counter += 1;
+                });
             });
     });
 
-    // Paso 2: buscar cada palabra de la query en el índice
-    let query_lower = query.to_lowercase();
-    let query_words: Vec<&str> = query_lower.split_whitespace().collect();
+    let mut ranked_results: Vec<(usize, u32)> = scores.into_iter().collect();
 
-    // Paso 3: acumular índices de canciones que coincidan
-    let mut indices_encontrados: Vec<usize> = query_words
+    ranked_results.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| songs[a.0].name.to_lowercase().cmp(&songs[b.0].name.to_lowercase()))
+    });
+
+    ranked_results
+        .into_iter()
+        .map(|(song_index, _score)| songs[song_index].clone())
+        .collect()
+}
+
+// BÚSQUEDA 2: Por rango de años.
+//
+// Esta búsqueda es numérica, no textual.
+// Trabaja con dos límites: desde y hasta.
+// Si el usuario coloca el rango al revés, se corrige automáticamente.
+// Luego ordena los resultados por año.
+pub fn search_by_year_range(songs: &[Song], from: u32, to: u32) -> Vec<Song> {
+    let start = from.min(to);
+    let end = from.max(to);
+
+    let mut results: Vec<Song> = songs
         .iter()
-        .flat_map(|word| {
-            index.iter()
-                .filter(|(key, _)| key.contains(*word))
-                .flat_map(|(_, indices)| indices.clone())
-        })
+        .filter(|song| song.year >= start && song.year <= end)
+        .cloned()
         .collect();
 
-    // Eliminar duplicados manteniendo orden
-    indices_encontrados.sort();
-    indices_encontrados.dedup();
+    results.sort_by_key(|song| song.year);
 
-    indices_encontrados
-        .into_iter()
-        .map(|i| songs[i].clone())
-        .collect()
+    results
 }
 
-// BÚSQUEDA 2: Por rango de años
-// Opera sobre números con dos parámetros (desde/hasta)
-// Si el usuario pone el rango al revés lo corrige automáticamente
-pub fn search_by_year_range(songs: &[Song], from: u32, to: u32) -> Vec<Song> {
-    let (start, end) = if from <= to {
-        (from, to)
-    } else {
-        (to, from)
-    };
-
-    songs.iter()
-        .cloned()
-        .filter(|s| s.year >= start && s.year <= end)
-        .collect()
-}
-
-// BÚSQUEDA 3: Por género con ranking de relevancia usando fold
-// Match exacto = puntaje 2, match parcial = puntaje 1
-// Devuelve ordenadas por relevancia de mayor a menor
+// BÚSQUEDA 3: Por género con ranking de relevancia usando fold.
+//
+// Esta búsqueda trata el género como una categoría.
+// Usa un sistema de puntaje:
+// 3 = coincidencia exacta
+// 2 = el género empieza con la consulta
+// 1 = el género contiene la consulta
+//
+// Se implementa con fold para acumular los resultados y luego ordenarlos
+// por relevancia. Es una técnica distinta al índice invertido de nombre
+// y distinta a la comparación numérica por rango de años.
 pub fn search_by_genre_ranked(songs: &[Song], query: &str) -> Vec<Song> {
-    let query_lower = query.to_lowercase();
+    let query_normalized = normalize_text(query);
+
+    if query_normalized.is_empty() {
+        return songs.to_vec();
+    }
 
     let mut ranked = songs.iter().fold(Vec::new(), |mut acc, song| {
-        let genre_lower = song.genre.to_lowercase();
+        let genre_normalized = normalize_text(&song.genre);
 
-        let score = if genre_lower == query_lower {
-            2 // match exacto
-        } else if genre_lower.contains(&query_lower) {
-            1 // match parcial
+        let score = if genre_normalized == query_normalized {
+            3
+        } else if genre_normalized.starts_with(&query_normalized) {
+            2
+        } else if genre_normalized.contains(&query_normalized) {
+            1
         } else {
             0
         };
@@ -112,9 +153,40 @@ pub fn search_by_genre_ranked(songs: &[Song], query: &str) -> Vec<Song> {
         if score > 0 {
             acc.push((score, song.clone()));
         }
+
         acc
     });
 
-    ranked.sort_by(|a, b| b.0.cmp(&a.0));
+    ranked.sort_by(|a, b| {
+        b.0.cmp(&a.0)
+            .then_with(|| a.1.genre.to_lowercase().cmp(&b.1.genre.to_lowercase()))
+            .then_with(|| a.1.name.to_lowercase().cmp(&b.1.name.to_lowercase()))
+    });
+
     ranked.into_iter().map(|(_, song)| song).collect()
+}
+
+fn normalize_text(text: &str) -> String {
+    text
+        .trim()
+        .to_lowercase()
+        .replace('á', "a")
+        .replace('é', "e")
+        .replace('í', "i")
+        .replace('ó', "o")
+        .replace('ú', "u")
+        .replace('ñ', "n")
+}
+
+fn tokenize(text: &str) -> Vec<String> {
+    let normalized = normalize_text(text);
+
+    let mut seen = HashSet::new();
+
+    normalized
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.trim().is_empty())
+        .map(|word| word.trim().to_string())
+        .filter(|word| seen.insert(word.clone()))
+        .collect()
 }
