@@ -350,19 +350,24 @@ fn handle_request(
 }
 
 fn handle_list_library_songs(writer: &mut TcpStream) {
-    let biblioteca_path = Path::new("biblioteca");
+    let biblioteca_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("biblioteca");
+
+    println!("Buscando biblioteca en: {:?}", biblioteca_path);
 
     if !biblioteca_path.exists() {
         send_response(
             writer,
             &Response::Error {
-                message: "La carpeta biblioteca no existe".to_string(),
+                message: format!(
+                    "La carpeta biblioteca no existe en la ruta: {:?}",
+                    biblioteca_path
+                ),
             },
         );
         return;
     }
 
-    let entries = match fs::read_dir(biblioteca_path) {
+    let entries = match fs::read_dir(&biblioteca_path) {
         Ok(entries) => entries,
         Err(e) => {
             send_response(
@@ -394,6 +399,8 @@ fn handle_list_library_songs(writer: &mut TcpStream) {
 
     files.sort();
 
+    println!("Archivos MP3 encontrados en biblioteca: {:?}", files);
+
     send_response(writer, &Response::LibraryList { files });
 }
 
@@ -416,8 +423,12 @@ fn handle_add_song_from_library(
         return;
     }
 
-    let source_path = Path::new("biblioteca").join(&file_name);
-    let destination_path = Path::new("songs").join(&file_name);
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = base_dir.join("biblioteca").join(&file_name);
+    let destination_path = base_dir.join("songs").join(&file_name);
+
+    println!("Archivo origen: {:?}", source_path);
+    println!("Archivo destino: {:?}", destination_path);
 
     if !source_path.exists() {
         send_response(
@@ -439,7 +450,9 @@ fn handle_add_song_from_library(
         return;
     }
 
-    if let Err(e) = fs::create_dir_all("songs") {
+    let songs_dir = base_dir.join("songs");
+
+    if let Err(e) = fs::create_dir_all(&songs_dir) {
         send_response(
             writer,
             &Response::Error {
@@ -506,7 +519,10 @@ fn handle_add_song_from_library(
 
     songs.push(new_song.clone());
 
-    save_songs("canciones.json", &songs);
+    let songs_json_path = base_dir.join("canciones.json");
+    let songs_json_string = songs_json_path.to_string_lossy().to_string();
+
+    save_songs(&songs_json_string, &songs);
 
     send_response(
         writer,
