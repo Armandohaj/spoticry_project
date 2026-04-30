@@ -65,7 +65,7 @@ pub fn save_songs(path: &str, songs: &[Song]) {
     }
 }
 
-// Cargar playlists desde JSON
+
 pub fn load_playlists(path: &str, songs: &[Song]) -> Vec<Playlist> {
     let content = match fs::read_to_string(path) {
         Ok(c)  => c,
